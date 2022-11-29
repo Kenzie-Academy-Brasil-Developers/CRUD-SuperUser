@@ -50,6 +50,7 @@ const ensureIsAdm = (request, response, next) => {
     return next()
 }
 
+
 // SERVICES
 const createUserService = async (userData) => {
     const userArealdyExists = users.find((user) => user.email === userData.email);
@@ -126,49 +127,61 @@ const listUserLogedService = (id) => {
     }]
 }
 
-const deleteUserService = (id) => {
-    console.log(id)
-    const userIndex = users.findIndex(el => el.uuid === id)
-    users.splice(userIndex, 1)
-    console.log(users)
-    return [204, {}]
+const deleteUserService = (idToken, id) => {
+
+    const userLoged = users.find(el => el.uuid === idToken)
+
+    if(userLoged.isAdm === true){
+        const userIndex = users.findIndex(el => el.uuid === id)
+        users.splice(userIndex, 1)
+        return [204, {}]
+    } else if (id === idToken) {
+        const userIndex = users.findIndex(el => el.uuid === idToken)
+        users.splice(userIndex, 1)
+        return [204, {}]
+    } else {
+        return [401, {
+            "message": "Missing authorization headers"
+        }]
+    }
+
 }
 
-const editUserService = async  (id, data) => {
+const editUserService = async  (idToken, data, id) => {
+    console.log(idToken, data, id)
+    const userLoged = users.find(el => el.uuid === idToken)
 
-    const user = users.find(el => el.uuid === id)
+    if(userLoged.isAdm === true){
 
-    let newName = user.name
-    let newEmail = user.email
-    let newPassword = user.password
+        const userIndex = users.findIndex(el => el.uuid === id)
+        users[userIndex] = {...users[userIndex], ...data, updatedOn: new Date()}
+      
+        return [201, {
+            name: users[userIndex].name,
+            email: users[userIndex].email,
+            uuid: users[userIndex].uuid,
+            createdOn: users[userIndex].createdOn,
+            updatedOn: users[userIndex].updatedOn,
+            isAdm: users[userIndex].isAdm
+        }]
+    } else if (id === idToken) {
+        const userIndex = users.findIndex(el => el.uuid === idToken)
+        users[userIndex] = {...users[userIndex], ...data, updatedOn: new Date()}
+      
+        return [201, {
+            name: users[userIndex].name,
+            email: users[userIndex].email,
+            uuid: users[userIndex].uuid,
+            createdOn: users[userIndex].createdOn,
+            updatedOn: users[userIndex].updatedOn,
+            isAdm: users[userIndex].isAdm
+        }]
+    } else {
+        return [403, {
+            "message": "missing admin permissions"
+          }]
+    }
 
-    if(data.name) {
-        newName = data.name
-    }
-    if(data.email) {
-        newEmail = data.email
-    }
-    if(data.password){
-        newPassword = await hash(data.password, 10)
-    }
-    
-    let newUser = {
-        email: newName,
-        name: newName,
-        password: newPassword,
-        createdOn: user.createdOn,
-        updatedOn: new Date(),
-        isAdm: user.isAdm
-    }
-
-    return [201, {
-        name: newUser.name,
-        email: newUser.email,
-        uuid: newUser.uuid,
-        createdOn: newUser.createdOn,
-        updatedOn: newUser.updatedOn,
-        isAdm: newUser.isAdm
-    }]
 }
 
 
@@ -194,12 +207,14 @@ const listUserLogedController = (request, response) => {
 }
 
 const deleteUserController = (request, response) => {
-    const [status, data] = deleteUserService(request.user.id)
+    const {id} = request.params
+    const [status, data] = deleteUserService(request.user.id, id)
     return response.status(status).json(data)
 }
 
 const editUserController = async (request, response) => {
-    const [status, data] = await editUserService(request.user.id, request.body)
+    const {id} = request.params
+    const [status, data] = await editUserService(request.user.id, request.body, id)
     return response.status(status).json(data)
 }
 
@@ -209,8 +224,8 @@ app.post("/users", createUserController);
 app.get('/users', ensureAuthMiddleware, ensureIsAdm, listUsersController);
 app.post('/login', createSessionController);
 app.get('/users/profile',ensureAuthMiddleware, listUserLogedController);
-app.delete('/users/:id',ensureAuthMiddleware, ensureIsAdm, deleteUserController);
-app.patch('/users/:id',ensureAuthMiddleware, ensureIsAdm, editUserController);
+app.delete('/users/:id', ensureAuthMiddleware, ensureIsAdm, deleteUserController);
+app.patch('/users/:id',ensureAuthMiddleware, editUserController);
 
 app.listen(3000, () => {
     console.log('Server running in port 3000')
